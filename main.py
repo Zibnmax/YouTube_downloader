@@ -2,7 +2,9 @@ import os
 import sys
 import asyncio
 
-from pytube import YouTube, Playlist
+from pytube import YouTube, Playlist, Channel, exceptions
+from tqdm.asyncio import tqdm_asyncio
+from tqdm import tqdm
 
 
 OUTPUT_PATH = "videos"
@@ -33,31 +35,38 @@ async def main():
     for link in make_list():
         try:
             yt = YouTube(link)
-
         except:
-            yt = Playlist(link)
+            try:
+                pl = Playlist(link)
+                print(f'Playlist from {pl.owner} found. Title: {pl.title}')
+                for video in pl.videos:
+                    tasks.append(asyncio.create_task(download_video(video, output_path=os.path.join(OUTPUT_PATH, pl.title))))
 
-            print(yt.owner)
+            except:
+                try:
+                    ch = Channel(link)
+                    print(f'Channel {ch.channel_name} found.')
+                    for video in ch.videos:
+                        tasks.append(asyncio.create_task(download_video(video, output_path=os.path.join(OUTPUT_PATH, ch.channel_name))))
             
-        tasks.append(asyncio.create_task(download_video(yt, output_path=OUTPUT_PATH)))
-
+                except exceptions.RegexMatchError:
+                    print(f'Wrong link found "{link}". Ignoring...')
+                    continue
+        else:
+            tasks.append(asyncio.create_task(download_video(yt, output_path=OUTPUT_PATH)))
 
     await asyncio.gather(*tasks)
 
 
+
 async def download_video(yt, output_path):
-    # loop = asyncio.get_running_loop()
+
     yd = yt.streams.filter(progressive=True, type='video').get_highest_resolution()
-    # await loop.run_in_executor(None, yd.download, output_path=output_path)
-    await asyncio.to_thread(yd.download, output_path=output_path, max_retries=2)
+    os.makedirs(output_path, exist_ok=True)
+    print(f'Downloading {yt.title}')
+    await asyncio.to_thread(yd.download, output_path=output_path, max_retries=1)
 
 
 if __name__ == "__main__":
     asyncio.run(main())
     print("Done!")
-
-    # p = Playlist('https://www.youtube.com/playlist?list=PLth0xHD9unvdCvL1aUPXUBDrw60Do4RyI')
-    # print(p)
-    # with open(file=links_path, mode='w') as file:
-    #     txt = '\n'.join(p)
-    #     file.write(txt)
