@@ -3,6 +3,7 @@ import sys
 import asyncio
 
 from pytube import YouTube, Playlist, Channel, exceptions
+from pytube.cli import display_progress_bar, on_progress
 from tqdm.asyncio import tqdm_asyncio
 from tqdm import tqdm
 
@@ -34,6 +35,7 @@ async def main():
     tasks = []
     for link in make_list():
         try:
+            # yt = YouTube(link, on_progress_callback=on_progress)
             yt = YouTube(link)
         except:
             try:
@@ -55,17 +57,18 @@ async def main():
         else:
             tasks.append(asyncio.create_task(download_video(yt, output_path=OUTPUT_PATH)))
 
-    await asyncio.gather(*tasks)
-
+    await tqdm_asyncio.gather(*tasks)
+    # await asyncio.gather(*tasks)
 
 
 async def download_video(yt, output_path):
 
     yd = yt.streams.filter(progressive=True, type='video').get_highest_resolution()
     os.makedirs(output_path, exist_ok=True)
-    print(f'Downloading {yt.title}')
+    # print(f'Downloading {yt.title}')
+    tqdm.write(f'Downloading {yt.title}')
     await asyncio.to_thread(yd.download, output_path=output_path, max_retries=1)
-
+    # await asyncio.to_thread(tqdm_asyncio(yd.on_progress))
 
 if __name__ == "__main__":
     asyncio.run(main())
