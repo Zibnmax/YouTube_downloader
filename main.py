@@ -1,10 +1,11 @@
 import os
 import sys
 import asyncio
+import aiohttp
 
 from pytube import YouTube, Playlist, Channel, exceptions
-from pytube.cli import display_progress_bar, on_progress
 from tqdm.asyncio import tqdm_asyncio
+import tqdm.asyncio
 from tqdm import tqdm
 
 
@@ -35,7 +36,6 @@ async def main():
     tasks = []
     for link in make_list():
         try:
-            # yt = YouTube(link, on_progress_callback=on_progress)
             yt = YouTube(link)
         except:
             try:
@@ -55,21 +55,50 @@ async def main():
                     print(f'Wrong link found "{link}". Ignoring...')
                     continue
         else:
-            tasks.append(asyncio.create_task(download_video(yt, output_path=OUTPUT_PATH)))
+            tasks.append(asyncio.ensure_future(download_video(yt, output_path=OUTPUT_PATH)))
 
-    await tqdm_asyncio.gather(*tasks)
-    # await asyncio.gather(*tasks)
+    await tqdm_asyncio.gather(*tasks, desc='Files total')
 
+
+# async def download_video(yt, output_path):
+
+#     yd = yt.streams.filter(progressive=True, type='video').get_highest_resolution()
+#     os.makedirs(output_path, exist_ok=True)
+#     tqdm.write(f'Downloading {yt.title}')
+#     await asyncio.to_thread(yd.download, output_path=output_path, max_retries=1)
+#     await asyncio.to_thread(yd.on_progress)
+
+# Working p-bars!
+# async def download_video(yt, output_path):
+#     yd = yt.streams.filter(progressive=True, type='video').get_highest_resolution()
+#     os.makedirs(output_path, exist_ok=True)
+#     with open(os.path.join(output_path, yd.default_filename), "wb") as f:
+#         async with aiohttp.ClientSession() as session:
+#             async with session.get(yd.url, timeout=None) as resp:
+#                 total = int(resp.headers.get("Content-Length", 0))
+#                 pbar = tqdm(total=total, unit="B", unit_scale=True)
+#                 while True:
+#                     chunk = await resp.content.read(8192)
+#                     if not chunk:
+#                         break
+#                     f.write(chunk)
+#                     pbar.update(len(chunk))
+#                 pbar.close()
 
 async def download_video(yt, output_path):
-
     yd = yt.streams.filter(progressive=True, type='video').get_highest_resolution()
     os.makedirs(output_path, exist_ok=True)
-    # print(f'Downloading {yt.title}')
-    tqdm.write(f'Downloading {yt.title}')
-    await asyncio.to_thread(yd.download, output_path=output_path, max_retries=1)
-    # await asyncio.to_thread(tqdm_asyncio(yd.on_progress))
+    file_path = os.path.join(output_path, f'{yt.title}.mp4')
+    pbar = tqdm(total=int(yd.filesize), unit='B', unit_scale=True)
+    with open(file_path, 'wb') as f:
+        def on_progress(chunk, file_handler, bytes_remaining):
+            f.write(chunk)
+            pbar.update(len(chunk))
+        yd.on_progress = on_progress
+        await asyncio.to_thread(yd.download, output_path=output_path, max_retries=1)
+    pbar.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
-    print("Done!")
+    tqdm.write("\nDone!")
